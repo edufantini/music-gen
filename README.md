@@ -1,6 +1,6 @@
-#Music Generator with LSTM
+# Music Generator with LSTM
 
-##About
+## About
 
 Music resamples language as a temporal sequence of articulated sounds. They say something, often something human.
 
