@@ -111,47 +111,40 @@ def get_part_data(part):
 
 # encode the file data from a .mid file
 def encode_data(path, n_frames):
-    data_path = path.removesuffix('.mid')
-    if not data_path.__contains__('.npy'):
-        data_path += '.npy'
 
-    try:
-        return np.load(data_path, allow_pickle=True)
+    print('Processing file {}'.format(path))
+    score = open_midi(path, True)
 
-    except:
-        print('Processing file {}'.format(path))
-        score = open_midi(path, True)
+    n = len(score.parts)
+    parts = []
 
-        n = len(score.parts)
-        parts = []
+    for i, part in enumerate(score.parts):
 
-        for i, part in enumerate(score.parts):
+        print('Processing part {}/{}'.format(i + 1, n))
+        n_beats = part.timeSignature.numerator
+        try:
+            data = get_part_data(part.flat)
+        except:
+            break
 
-            print('Processing part {}/{}'.format(i + 1, n))
-            n_beats = part.timeSignature.numerator
-            try:
-                data = get_part_data(part.flat)
-            except:
-                break
+        part_frames = []
 
-            part_frames = []
+        for it in tqdm(part.measures(1, len(data)),
+                       desc="Converting measures from part {}".format(i + 1),
+                       ascii=True, ncols=150):
 
-            for it in tqdm(part.measures(1, len(data)),
-                           desc="Converting measures from part {}".format(i + 1),
-                           ascii=True, ncols=150):
+            if isinstance(it, instrument.Instrument):
+                print(it)
+                input()
 
-                if isinstance(it, instrument.Instrument):
-                    print(it)
-                    input()
+            if isinstance(it, stream.Measure):
+                part_frames.append(measure2frames(it, n_frames))
 
-                if isinstance(it, stream.Measure):
-                    part_frames.append(measure2frames(it, n_frames))
+        this_part = np.asarray(part_frames)
+        parts.append(this_part)
+        data.clear()
 
-            this_part = np.asarray(part_frames)
-            parts.append(this_part)
-            data.clear()
-
-        return parts
+    return parts
 
 
 # get encoded file parts with 32 frames per measure (bar)
