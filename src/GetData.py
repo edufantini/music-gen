@@ -6,11 +6,6 @@ import music21
 import glob
 from tqdm import tqdm
 
-N_FRAMES = 32
-path = "clean_midi/"
-out = []
-
-
 # open and read file
 def open_midi(midi_path, no_drums):
     mf = music21.midi.MidiFile()
@@ -43,7 +38,7 @@ def extract_notes(midi_part):
 
 
 # extract frames from each measure
-def measure2frames(measure, N_BEATS=4, n_frames=N_FRAMES, BEAT_S=None, DUR=None):
+def measure2frames(measure, N_BEATS=4, n_frames, BEAT_S=None, DUR=None):
     measure_notes = extract_notes(measure)
     v = []
     for i in measure_notes:
@@ -115,7 +110,7 @@ def get_part_data(part):
 
 
 # encode the file data from a .mid file
-def encode_data(path=path, n_frames=N_FRAMES):
+def encode_data(path, n_frames):
     data_path = path.removesuffix('.mid')
     if not data_path.__contains__('.npy'):
         data_path += '.npy'
@@ -160,9 +155,9 @@ def encode_data(path=path, n_frames=N_FRAMES):
 
 
 # get encoded file parts with 32 frames per measure (bar)
-parts = encode_data(path, N_FRAMES)
+#parts = encode_data(path, N_FRAMES)
 
-for part in parts:
+#for part in parts:
     # part = part.T
-    print(part.shape)
-    print(pd.DataFrame(part[0]))
+    # print(part.shape)
+    # print(pd.DataFrame(part[0]))
