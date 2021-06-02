@@ -38,7 +38,7 @@ def extract_notes(midi_part):
 
 
 # extract frames from each measure
-def measure2frames(measure, N_BEATS=4, n_frames, BEAT_S=None, DUR=None):
+def measure2frames(measure, n_frames, N_BEATS=4, BEAT_S=None, DUR=None):
     measure_notes = extract_notes(measure)
     v = []
     for i in measure_notes:
