@@ -17,6 +17,16 @@ On the first step, we'll use text generation techniques, using Recurrent Neural 
 ## Dataset
 
 ## Data preprocessing
+From an input file with songs in MIDI format, we preprocess the data in order to encode them using multi-hot encoding.
+
+![image](https://user-images.githubusercontent.com/49798588/120706718-cdf9ce00-c48f-11eb-8eb1-db7f31cf26af.png)
+
+
+For each bar, we separate them into 32 different frames, where each frame is an 88-position multi-hot vector, which each position represents the notes of a standard keyboard. The notes that are being played at the exact instant of the frame receive the value '1' in the respective position of the vector, whereas the notes that are turned off receive the value '0'.
+
+The representation of the list is exemplified below.
+
+![image](https://user-images.githubusercontent.com/49798588/120706592-ac004b80-c48f-11eb-9aad-89ce5634029a.png)
 
 ## LSTM Model
 
