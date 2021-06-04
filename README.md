@@ -34,6 +34,6 @@ The representation of the list is exemplified below.
 
 ### Training and validation
 
-### Test and music generation
+### Tests and music generation
 
 ## Improvements and optimizations
