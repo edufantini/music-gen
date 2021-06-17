@@ -121,7 +121,11 @@ def encode_data(path, n_frames):
     for i, part in enumerate(score.parts):
 
         print('Processing part {}/{}'.format(i + 1, n))
-        n_beats = part.timeSignature.numerator
+        n_beats = None
+        try:
+            n_beats = part.timeSignature.numerator
+        except:
+            n_beats = 4
         try:
             data = get_part_data(part.flat)
         except:
@@ -135,7 +139,7 @@ def encode_data(path, n_frames):
 
             if isinstance(it, instrument.Instrument):
                 print(it)
-                input()
+                # input()
 
             if isinstance(it, stream.Measure):
                 part_frames.append(measure2frames(it, n_frames))
