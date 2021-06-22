@@ -2,13 +2,26 @@ import sys
 import numpy as np
 import pandas as pd
 from music21 import *
-import music21
 import glob
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from scipy import interpolate
+
+path = '../data/English_Man_In_New_York.1.mid'
+N_FRAMES = 36
+N_NOTES = 88
+MIDI_OFFSET = 20
+
+
+def int2note(i):
+    index = i + MIDI_OFFSET
+    n = note.Note(midi=index)
+    return n
+
 
 # open and read file
 def open_midi(midi_path, no_drums):
-    mf = music21.midi.MidiFile()
+    mf = midi.MidiFile()
     mf.open(midi_path)
     mf.read()
     mf.close()
@@ -16,104 +29,98 @@ def open_midi(midi_path, no_drums):
         for i in range(len(mf.tracks)):
             mf.tracks[i].events = [ev for ev in mf.tracks[i].events if ev.channel != 10]
 
-    return music21.midi.translate.midiFileToStream(mf)
+    return midi.translate.midiFileToStream(mf)
 
 
-# get all notes from music21 obj
-def extract_notes(midi_part):
+# get all notes from m21 obj
+def extract_notes(midi):
     parent_element = []
     # print(midi_part)
     # ret = []
-    for nt in midi_part.flat.notes:
+    for nt in midi.flat.notes:
         if isinstance(nt, note.Note):
-            # ret.append(max(0.0, nt.pitch.ps))
             parent_element.append(nt)
         elif isinstance(nt, chord.Chord):
-            for pitch in nt.pitches:
-                # ret.append(max(0.0, pitch.ps))
-                parent_element.append(nt)
+            for p in nt.pitches:
+                # print(p, note.Note(pitch=p))
+                # input()
+                parent_element.append(note.Note(pitch=p))
 
-    # return ret, parent_element
+    # print(parent_element)
+    # input()
     return parent_element
 
 
 # extract frames from each measure
-def measure2frames(measure, n_frames, N_BEATS=4, BEAT_S=None, DUR=None):
+def measure2frames(measure, n_frames, ks, bpm, ts):
     measure_notes = extract_notes(measure)
-    v = []
-    for i in measure_notes:
-        if isinstance(i, chord.Chord):
-            for nt in i:
-                v.append(nt)
 
-        else:
-            v.append(i)
+    frame_s = None
+    frame_e = None
 
-    try:
-        frames_beat = n_frames / measure.timeSignature.numerator
-    except:
-        frames_beat = n_frames / N_BEATS
-    # print(frames_beat)
+    frames_beat = n_frames / ts.numerator
 
-    frames = [[0 for i in range(88)] for j in range(n_frames)]
+    frames = [[0 for a in range(N_NOTES)] for b in range(n_frames)]
 
-    for nt in v:
-        if BEAT_S:
-            frame_i = int((BEAT_S - 1) * frames_beat)
-        else:
-            try:
-                frame_i = int((nt.beat - 1) * frames_beat)
-            except:
-                pass
+    for nt in measure_notes:
 
-        if DUR:
-            frame_e = frame_i + int((DUR - 1) * frames_beat)
-        else:
-            try:
-                frame_e = frame_i + int(nt.quarterLength * frames_beat)
-            except:
-                pass
+        if nt.pitch.midi > N_NOTES + MIDI_OFFSET:
+            break
 
-        index = nt.pitch.midi - 24
+        # try:
+        # print(nt.offset)
+        frame_s = int(nt.offset * frames_beat)
+        # except:
+        # print('a')
+        # break
+        # pass
 
-        try:
-            for i in range(frame_i, frame_e):
-                # frames[i][index] = index
-                frames[i][index] = 1
-        except:
-            pass
+        # try:
+        # print(int(nt.quarterLength * frames_beat))
+        frame_e = frame_s + int(nt.quarterLength * frames_beat)
+        # except:
+        # print('b')
+        # break
+        # pass
 
-        # print('{} | Índice: {} | Frame início: {} \t| \t Frame final: {} \t | Frames: {}'.format(nt.nameWithOctave, index, frame_i, frame_e, frame_c))
+        index = nt.pitch.midi - MIDI_OFFSET
 
-    # print(len(frames))
-    return frames
+        for i in range(frame_s, frame_e):
+            # frames[i][index] = index
+            frames[i][index] = 1
 
+        # print('{} | Índice: {} | Frame início: {} \t| \t Frame final: {}'.format(nt.nameWithOctave, index, frame_s, frame_e))
+        # input()
 
-# retrieve data from music21 Part obj
-def get_part_data(part):
-    part_data = []
+    output = [ks.tonicPitchNameWithCase,
+              bpm,
+              '{}/{}'.format(ts.numerator, ts.denominator),
+              frames]
+    print(output)
 
-    n_bars = int(len(part) / part.timeSignature.numerator)
-    bar = []
-    for measure in part.measures(1, n_bars):
-        # print(measure)
-
-        if isinstance(measure, stream.Measure):
-            try:
-                bar.append(extract_notes(measure))
-                # print(extract_notes(measure))
-            except:
-                pass
-            part_data.append(bar)
-
-    return part_data
+    # print('\n', pd.DataFrame(output).to_string())
+    # input()
+    return output
 
 
 # encode the file data from a .mid file
 def encode_data(path, n_frames):
-
     print('Processing file {}'.format(path))
     score = open_midi(path, True)
+
+    # transpose song to C major/A minor
+    ks = score.analyze('key')
+    if ks != 'C' and ks != 'a':
+        if ks.mode == 'major':
+            transpose_int = interval. \
+                Interval(ks.tonic, pitch.Pitch('C'))
+            score = score.transpose(transpose_int)
+            ks = key.Key('C')
+        elif ks.mode == 'minor':
+            transpose_int = interval. \
+                Interval(ks.tonic, pitch.Pitch('a'))
+            score = score.transpose(transpose_int)
+            ks = key.Key('a')
 
     n = len(score.parts)
     parts = []
@@ -121,36 +128,197 @@ def encode_data(path, n_frames):
     for i, part in enumerate(score.parts):
 
         print('Processing part {}/{}'.format(i + 1, n))
-        n_beats = part.timeSignature.numerator
-        try:
-            data = get_part_data(part.flat)
-        except:
-            break
+
+        # get part instrument
+        inst = part.getElementsByClass(instrument.Instrument)[0].instrumentName
+        print(inst)
+        # input()
+
+        # get part tempo
+        metronome = part.getElementsByClass(tempo.TempoIndication)[0]
+        bpm = metronome.getQuarterBPM()
+
+        # filter parts that are not in 4/4
+        ts = part.getTimeSignatures()[0]
+        if ts.numerator != 4 and ts.denominator != 4:
+            print('Part not 4/4')
+            return
 
         part_frames = []
+        for it in tqdm(part.measures(0, len(part)),
+                       desc="Converting part {}".format(i + 1),
+                       ncols=80):
 
-        for it in tqdm(part.measures(1, len(data)),
-                       desc="Converting measures from part {}".format(i + 1),
-                       ascii=True, ncols=150):
+            # check for tempo changes
+            try:
+                m_bpm = it.getElementsByClass(tempo.TempoIndication)[0].getQuarterBPM()
+                if m_bpm is not None and m_bpm != bpm:
+                    bpm = m_bpm
+            except:
+                pass
 
-            if isinstance(it, instrument.Instrument):
-                print(it)
-                input()
+            # check for time sign changes
+            m_ts = score.getTimeSignatures()[0]
+            if m_ts is not None and m_ts != ts:
+                # it changed
+                if ts.numerator != 4 and ts.denominator != 4:
+                    print('Measure not 4/4')
+                    break
+                else:
+                    ts = m_ts
 
-            if isinstance(it, stream.Measure):
-                part_frames.append(measure2frames(it, n_frames))
+            if isinstance(it, stream.Stream):
+                part_frames.append(measure2frames(it, n_frames, ks, bpm, ts))
 
-        this_part = np.asarray(part_frames)
+        this_part = [inst,
+                     ks.tonicPitchNameWithCase,
+                     bpm,
+                     '{}/{}'.format(ts.numerator, ts.denominator),
+                     np.asarray(part_frames)]
+        # print(this_part[0:4])
+        # input()
+        # print(this_part[4:])
+        # input()
         parts.append(this_part)
-        data.clear()
+
+    np.save(arr=parts, file='teste')
 
     return parts
 
 
-# get encoded file parts with 32 frames per measure (bar)
-#parts = encode_data(path, N_FRAMES)
+# decode a N_NOTESxN_FRAMES array and turn it into a m21 Measure
+def decode_measure(measure, n_frames, ts):
+    last_frame = False
 
-#for part in parts:
-    # part = part.T
+    # the stream that will receive the notes
+    output = stream.Measure()
+
+    # vectors that will hold the current notes states and durations
+    # they are initialized with the values of the first frame
+    state_register = measure[:][0].copy().to_numpy()
+    start_register = measure[:][0].copy().to_numpy() - 1
+    duration_register = measure[:][0].copy().to_numpy()
+
+    # iterate over frames
+    for f in range(n_frames):
+        # print('Frame ', f)
+        # with np.printoptions(threshold=np.inf):
+        #     print('\nStates:\t', state_register.reshape(1, 88))
+        #     print('\nStarts:\t', start_register.reshape(1, 88))
+        #     print('\nDurs:\t', duration_register.reshape(1, 88))
+        # input()
+
+        frames_per_beat = n_frames / ts.numerator
+
+        frame = measure[f]
+
+        if f == n_frames - 1:
+            last_frame = True
+
+        # print("Frame {}\n".format(f), frame)
+        # input()
+
+        # iterate over notes
+        # state is ON/OFF 1/0
+        for note_index, state in enumerate(frame):
+
+            # if note state changed
+            if bool(state) != bool(state_register[note_index]):
+
+                # 1 -> *0*
+                if bool(state) is False:
+
+                    nt = int2note(note_index)
+                    nt.duration.quarterLength = duration_register[note_index] / frames_per_beat
+
+                    note_offset = start_register[note_index] / frames_per_beat
+                    output.insert(note_offset, nt)
+
+                    # print('Note {} turned off at frame {}\n'.format(int2note(note_index).nameWithOctave, f + 1) +
+                    #       'offset of {} frames ({})\n'.format(start_register[note_index], note_offset) +
+                    #       'and duration on {} frames ({})'.format(duration_register[note_index],
+                    #                                               nt.duration.quarterLength))
+                    # input()
+
+                    # restarting the registers
+                    duration_register[note_index] = 0
+                    state_register[note_index] = 0
+                    start_register[note_index] = -1
+
+
+                # 0 -> *1*
+                else:
+                    # starting registers
+                    duration_register[note_index] = 1
+                    state_register[note_index] = 1
+                    start_register[note_index] = f
+
+                    # print('Note {} turned on at frame {}'.format(int2note(note_index).nameWithOctave, f + 1))
+                    # input()
+
+            # if note is on and didnt change, increase duration
+            elif bool(state) is True:
+                duration_register[note_index] += 1
+
+                # print('Note {} increased duration at frame {} ({} frames)'.
+                #       format(int2note(note_index).nameWithOctave, f + 1, duration_register[note_index]))
+                # input()
+
+            # note is ON and measure ended
+            elif bool(state_register[note_index]) and last_frame:
+
+                nt = int2note(note_index)
+                note.duration.quarterLength = duration_register[note_index] / frames_per_beat
+
+                note_offset = start_register[note_index] / frames_per_beat
+                output.insert(note_offset, nt)
+                # print('Note {} turned off at frame {}\n'.format(int2note(note_index).nameWithOctave, f + 1) +
+                #       'offset of {} frames ({})\n'.format(start_register[note_index], note_offset) +
+                #       'and duration on {} frames ({})'.format(duration_register[note_index], nt.duration.quarterLength))
+                # input()
+
+    return output
+
+
+# decode a PARTxN_NOTESxN_FRAMES array
+def decode_part(part, n_frames):
+    decoded = stream.Stream()
+
+    # part settings
+    try: decoded.append(instrument.fromString(part[0]))
+    except: pass
+    decoded.append(key.Key(part[1]))
+    decoded.append(tempo.MetronomeMark(number=part[2], referent='quarter'))
+    ts = meter.TimeSignature(part[3])
+    decoded.append(ts)
+
+    part_measures = part[4:][0]
+
+    # iterate over measures (bars)
+    for i, m in enumerate(part_measures):
+
+        # measure settings
+        decoded.append(key.Key(m[0]))
+        decoded.append(tempo.MetronomeMark(number=m[1], referent='quarter'))
+        # decoded.append(tempo.TempoIndication(m[1]))
+        decoded.append(meter.TimeSignature(m[2]))
+
+        # now here comes the frames
+        measure = pd.DataFrame(m[3:][0])
+        measure = measure.T
+        # print("Measure {}\n".format(i+1), measure)
+        # input()
+        decoded.append(decode_measure(measure, n_frames, meter.TimeSignature('4/4')))
+
+    decoded.write('midi', fp='decoded.mid')
+    print('Saved')
+    input()
+
+
+# get encoded file parts with N_FRAMES frames per measure (bar)
+parts = encode_data(path, N_FRAMES)
+
+for i, part in enumerate(parts):
     # print(part.shape)
-    # print(pd.DataFrame(part[0]))
+    print('Part #{}'.format(i + 1))
+    decode_part(part, N_FRAMES)
